@@ -1,11 +1,20 @@
 use regex::Regex;
-use std::collections::{HashMap};
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Read, Error};
-use serde::{Deserialize};
+use std::io::Read;
 
 const ATTR_DELIM: &str = ".";
-const validTypes: Vec<&str> = vec!["string", "boolean", "decimal", "integer", "datetime", "binary", "reference", "complex"];
+const validTypes: Vec<&str> = vec![
+    "string",
+    "boolean",
+    "decimal",
+    "integer",
+    "datetime",
+    "binary",
+    "reference",
+    "complex",
+];
 
 const validMutability: Vec<&str> = vec!["readonly", "readwrite", "immutable", "writeonly"];
 
@@ -20,59 +29,59 @@ const validNameRegex: Regex = Regex::new(r"^[0-9A-Za-z_$-]+$").unwrap();
 /// in rfc7643 so that schema JSON files can be parsed using serde
 #[derive(Deserialize, Debug)]
 pub struct AttrType<'a> {
-    name: String,      // name
-    Type: String,      // type
-    description: String,      // description
-    caseExact: bool,        // caseExact
-    multiValued: bool,        // multiValued
-    mutability: String,      // mutability
-    required: bool,        // required
-    returned: String,      // returned
-    uniqueness: String,      // uniqueness
-    subAttributes:  Vec<AttrType<'a>>, // subAttributes
-    referenceTypes:  Vec<String>,    // referenceTypes
-    schemaId: String,    // schema's ID
+    name: String,                     // name
+    Type: String,                     // type
+    description: String,              // description
+    caseExact: bool,                  // caseExact
+    multiValued: bool,                // multiValued
+    mutability: String,               // mutability
+    required: bool,                   // required
+    returned: String,                 // returned
+    uniqueness: String,               // uniqueness
+    subAttributes: Vec<AttrType<'a>>, // subAttributes
+    referenceTypes: Vec<String>,      // referenceTypes
+    schemaId: String,                 // schema's ID
     #[serde(skip)]
-    normName: String,    // the lowercase name of the attribute
-    canonicalValues: Vec<String>,    // canonicalValues
+    normName: String, // the lowercase name of the attribute
+    canonicalValues: Vec<String>,     // canonicalValues
     #[serde(skip)]
-    subAttrMap:      HashMap<String, &'a AttrType<'a>>,
+    subAttrMap: HashMap<String, &'a AttrType<'a>>,
     #[serde(skip)]
-    parent:   Option<&'a AttrType<'a>>, // parent Attribute, should be non-exportable, otherwise stackoverflow occurs during marshalling
+    parent: Option<&'a AttrType<'a>>, // parent Attribute, should be non-exportable, otherwise stackoverflow occurs during marshalling
     #[serde(skip)]
-    isUnique: bool,      // for performance reasons
+    isUnique: bool, // for performance reasons
     #[serde(skip)]
-    isComplex: bool,      // for performance reasons
+    isComplex: bool, // for performance reasons
     #[serde(skip)]
-    isRef: bool,      // for performance reasons
+    isRef: bool, // for performance reasons
     #[serde(skip)]
-    isSimple: bool,      // for performance reasons
+    isSimple: bool, // for performance reasons
     #[serde(skip)]
-    isReadOnly: bool,      // for performance reasons
+    isReadOnly: bool, // for performance reasons
     #[serde(skip)]
-    isImmutable: bool,      // for performance reasons
+    isImmutable: bool, // for performance reasons
     #[serde(skip)]
-    isStringType: bool      // for performance reasons
+    isStringType: bool, // for performance reasons
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Meta {
-    location:     String,
-    resourceType: String
+    location: String,
+    resourceType: String,
 } // meta
 
 /// Definition of the schema
 #[derive(Deserialize, Debug)]
 pub struct Schema<'a> {
-    id:          String,
-    name:        String,
+    id: String,
+    name: String,
     description: String,
-    attributes:  Vec<AttrType<'a>>,
+    attributes: Vec<AttrType<'a>>,
     meta: Meta,
     #[serde(skip)]
-    attrMap:     HashMap<String, &'a AttrType<'a>>,
+    attrMap: HashMap<String, &'a AttrType<'a>>,
     #[serde(skip)]
-    text:        String,
+    text: String,
     #[serde(skip)]
     uniqueAts: Vec<String>,
     #[serde(skip)]
@@ -90,43 +99,58 @@ pub struct Schema<'a> {
 }
 
 pub struct SchemaError {
-    details: String
+    details: String,
 }
 
-impl From<Error> for SchemaError {
-    fn from(e: Error) -> SchemaError {
-        SchemaError{details: e.to_string()}
+impl From<serde_json::error::Error> for SchemaError {
+    fn from(e: serde_json::error::Error) -> SchemaError {
+        SchemaError {
+            details: e.to_string(),
+        }
+    }
+}
+
+impl From<std::io::Error> for SchemaError {
+    fn from(e: std::io::Error) -> SchemaError {
+        SchemaError {
+            details: e.to_string(),
+        }
     }
 }
 
 /// see section https://tools.ietf.org/html/rfc7643#section-2.2 for the defaults
 pub fn new_attr_type<'a>() -> AttrType<'a> {
-  AttrType{required: false, caseExact: false, mutability: String::from("readWrite"),
-      returned: String::from("default"), uniqueness: String::from("none"), Type: String::from("string"),
-      name: String::from(""),
-      description: String::from(""),
-      multiValued: false,
-      subAttributes: Vec::new(),
-      referenceTypes: Vec::new(),
-      canonicalValues: Vec::new(),
-      subAttrMap: HashMap::new(),
-      schemaId: String::from(""),
-      normName: String::from(""),
-      parent: None,
-      isUnique: false,
-      isComplex: false,
-      isRef: false,
-      isSimple: false,
-      isReadOnly: false,
-      isImmutable: false,
-      isStringType: false
-  }
+    AttrType {
+        required: false,
+        caseExact: false,
+        mutability: String::from("readWrite"),
+        returned: String::from("default"),
+        uniqueness: String::from("none"),
+        Type: String::from("string"),
+        name: String::from(""),
+        description: String::from(""),
+        multiValued: false,
+        subAttributes: Vec::new(),
+        referenceTypes: Vec::new(),
+        canonicalValues: Vec::new(),
+        subAttrMap: HashMap::new(),
+        schemaId: String::from(""),
+        normName: String::from(""),
+        parent: None,
+        isUnique: false,
+        isComplex: false,
+        isRef: false,
+        isSimple: false,
+        isReadOnly: false,
+        isImmutable: false,
+        isStringType: false,
+    }
 }
 
 /// Parses the given schema file and returns a schema instance after successfuly parsing
 pub fn load_schema(fileName: &String) -> Result<Schema, SchemaError> {
     let mut f = File::open(fileName)?;
-    let mut data= String::from("");
+    let mut data = String::from("");
     f.read_to_string(&mut data)?;
 
     //log.Infof("Loading schema from file %s", name)
@@ -138,7 +162,9 @@ pub fn load_schema(fileName: &String) -> Result<Schema, SchemaError> {
 
     let ve = validate(&mut sc);
     if !ve.is_empty() {
-        return Err(SchemaError{details: String::from("")});//ve.concat()
+        return Err(SchemaError {
+            details: String::from(""),
+        }); //ve.concat()
     }
 
     sc.text = data;
@@ -177,7 +203,7 @@ fn setAttrDefaults(attr: &mut AttrType) {
     }
 }
 
-fn validate<'a>(sc: &mut Schema) -> Vec<&'a str> {
+fn validate<'a>(sc: &'a mut Schema<'a>) -> Vec<&'a str> {
     let mut ve = Vec::new();
 
     if sc.id == "" {
@@ -192,8 +218,8 @@ fn validate<'a>(sc: &mut Schema) -> Vec<&'a str> {
     for attr in sc.attributes.iter_mut() {
         validateAttrType(attr, sc, &mut ve);
         let name = attr.name.to_ascii_lowercase();
-        sc.attrMap.insert(name.clone(), &attr);
-        if attr.IsUnique() {
+        sc.attrMap.insert(name.clone(), attr);
+        if attr.isUnique {
             sc.uniqueAts.push(name.clone())
         }
 
@@ -202,68 +228,86 @@ fn validate<'a>(sc: &mut Schema) -> Vec<&'a str> {
         }
     }
 
-    return ve
+    return ve;
 }
 
-fn validateAttrType(attr: &mut AttrType, sc: &mut Schema, ve: &mut Vec<&str>) {
+fn validateAttrType<'a>(attr: &'a mut AttrType<'a>, sc: &'a mut Schema<'a>, ve: &mut Vec<&str>) {
     // ATTRNAME   = ALPHA *(nameChar)
     // nameChar   = "$" / "-" / "_" / DIGIT / ALPHA
     // ALPHA      =  %x41-5A / %x61-7A   ; A-Z / a-z
     // DIGIT      =  %x30-39            ; 0-9
 
     if !validNameRegex.is_match(&attr.name) {
-        ve.push("Invalid attribute name '" + &attr.name + "'");
+        ve.push(&format!("invalid attribute name '{}'", &attr.name));
     }
 
     attr.Type.make_ascii_lowercase();
     if !exists(&attr.Type, validTypes) {
-        ve.push("Invalid type '" + &attr.Type + "' for attribute " + &attr.name);
+        ve.push(&format!(
+            "invalid type '{}' for attribute '{}'",
+            &attr.Type, &attr.name
+        ));
     }
 
     attr.mutability.make_ascii_lowercase();
     if !exists(&attr.mutability, validMutability) {
-        ve.push("Invalid mutability '" + &attr.mutability + "' for attribute " + &attr.name);
+        ve.push(&format!(
+            "invalid mutability '{}' for attribute '{}'",
+            &attr.mutability, &attr.name
+        ));
     }
 
     attr.returned.make_ascii_lowercase();
     if !exists(&attr.returned, validReturned) {
-        ve.push("Invalid returned '" + &attr.returned + "' for attribute " + &attr.name);
+        ve.push(&format!(
+            "invalid returned '{}' for attribute '{}'",
+            &attr.returned, &attr.name
+        ));
     }
 
-    attr.uniqueness = String::to_lowercase(&attr.uniqueness);
+    attr.uniqueness.make_ascii_lowercase();
     if !exists(&attr.uniqueness, validUniqueness) {
-        ve.push("Invalid uniqueness '" + &attr.uniqueness + "' for attribute " + &attr.name);
+        ve.push(&format!(
+            "invalid uniqueness '{}' for attribute '{}'",
+            &attr.uniqueness, &attr.name
+        ));
     }
 
-    if attr.IsRef() && (attr.referenceTypes.len() == 0) {
-        ve.push("No referenceTypes set for attribute " + &attr.name);
+    if attr.isRef && (attr.referenceTypes.len() == 0) {
+        ve.push(&format!(
+            "No referenceTypes set for attribute '{}'",
+            &attr.name
+        ));
     }
 
-    if attr.IsComplex() && (attr.subAttributes.len() == 0) {
-        ve.push("No subattributes set for attribute " + &attr.name);
+    if attr.isComplex && (attr.subAttributes.len() == 0) {
+        ve.push(&format!(
+            "No subattributes set for attribute '{}'",
+            &attr.name
+        ));
     }
 
-    attr.schemaId = sc.Id;
-    attr.normName = String::to_lowercase(&attr.name);
+    attr.schemaId = sc.id.clone();
+    attr.normName = attr.name.to_ascii_lowercase();
 
-    if attr.IsComplex() {
+    if attr.isComplex {
         //log.Debugf("validating sub-attributes of attributetype %s\n", attr.Name)
         for sa in attr.subAttributes.iter_mut() {
             //log.Tracef("validating sub-type %s of %s", sa.Name, attr.Name);
             validateAttrType(sa, sc, ve);
             sa.parent = Some(attr);
             attr.subAttrMap.insert(sa.normName.clone(), sa);
-            let name = &attr.normName + ATTR_DELIM + &sa.normName;
-            if sa.IsUnique() {
-                sc.uniqueAts.push(name);
+            let name = format!("{}{}{}", &attr.normName, ATTR_DELIM, &sa.normName);
+            if sa.isUnique {
+                sc.uniqueAts.push(name.clone());
             }
-            if sa.Required {
+            if sa.required {
                 sc.requiredAts.push(name)
             }
         }
 
         // add missing default sub-attributes https://tools.ietf.org/html/rfc7643#section-2.4
-        if attr.MultiValued {
+        if attr.multiValued {
             addDefSubAttrs(attr);
             setAttrDefaults(attr);
         }
@@ -273,13 +317,13 @@ fn validateAttrType(attr: &mut AttrType, sc: &mut Schema, ve: &mut Vec<&str>) {
 fn exists(val: &String, list: Vec<&str>) -> bool {
     for token in list.iter() {
         if token == val {
-            return true
+            return true;
         }
     }
-    return false
+    return false;
 }
 
-fn addDefSubAttrs(attr: & mut AttrType) {
+fn addDefSubAttrs<'a>(attr: &'a mut AttrType<'a>) {
     let mut defArr = Vec::new();
 
     let mut typeAttr = new_attr_type();
@@ -296,7 +340,7 @@ fn addDefSubAttrs(attr: & mut AttrType) {
     let mut displayAttr = new_attr_type();
     displayAttr.name = String::from("display");
     displayAttr.normName = displayAttr.name.clone();
-    displayAttr.Mutability = String::from("immutable");
+    displayAttr.mutability = String::from("immutable");
     defArr.push(displayAttr);
 
     let mut valueAttr = new_attr_type();
@@ -310,9 +354,9 @@ fn addDefSubAttrs(attr: & mut AttrType) {
     defArr.push(refAttr);
 
     for a in defArr.iter_mut() {
-        let key = String::to_lowercase(&a.name);
-        if !attr.subAttrMap.contains_key(key) {
-            a.SchemaId = attr.schemaId.clone();
+        let key = a.name.to_ascii_lowercase();
+        if !attr.subAttrMap.contains_key(&key) {
+            a.schemaId = attr.schemaId.clone();
             a.parent = Some(attr);
             attr.subAttrMap.insert(key, a);
         }
