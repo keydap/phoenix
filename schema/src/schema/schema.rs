@@ -22,8 +22,6 @@ const validReturned: Vec<&str> = vec!["always", "never", "default", "request"];
 
 const validUniqueness: Vec<&str> = vec!["none", "server", "global"];
 
-const validNameRegex: Regex = Regex::new(r"^[0-9A-Za-z_$-]+$").unwrap();
-
 /// The definition of an attribute's type
 /// All the fields are named identical to those defined in the schema definition
 /// in rfc7643 so that schema JSON files can be parsed using serde
@@ -147,27 +145,34 @@ pub fn new_attr_type<'a>() -> AttrType<'a> {
     }
 }
 
+//impl<'a> Schema<'a> {
+//    pub fn load(fileName: &String) -> Result<Schema<'a>, SchemaError> {
+//        let mut sc: Schema = serde_json::from_str("")?;
+//        sc.text = String::from("");
+//        Ok(sc)
+//    }
+//}
 /// Parses the given schema file and returns a schema instance after successfuly parsing
-pub fn load_schema(fileName: &String) -> Result<Schema, SchemaError> {
+pub fn load_schema<'a>(fileName: &'a String) -> Result<Schema<'a>, SchemaError> {
     let mut f = File::open(fileName)?;
     let mut data = String::from("");
     f.read_to_string(&mut data)?;
 
     //log.Infof("Loading schema from file %s", name)
     let mut sc: Schema = serde_json::from_str(&data[..])?;
+    sc.text = data;
 
     for at in sc.attributes.iter_mut() {
         setAttrDefaults(at);
     }
 
-    let ve = validate(&mut sc);
-    if !ve.is_empty() {
-        return Err(SchemaError {
-            details: String::from(""),
-        }); //ve.concat()
-    }
-
-    sc.text = data;
+    //let _ve = sc.validate();
+    //    let ve = validate(&mut sc);
+    //    if !ve.is_empty() {
+    //        return Err(SchemaError {
+    //            details: String::from(""),
+    //        }); //ve.concat()
+    //    }
 
     return Ok(sc);
 }
@@ -203,113 +208,122 @@ fn setAttrDefaults(attr: &mut AttrType) {
     }
 }
 
-fn validate<'a>(sc: &'a mut Schema<'a>) -> Vec<&'a str> {
-    let mut ve = Vec::new();
+impl<'a> Schema<'a> {
+    fn validate(&'a mut self) -> Vec<&'a str> {
+        let mut ve = Vec::new();
 
-    if sc.id == "" {
-        ve.push("Schema id is required");
-    }
+        if self.id == "" {
+            ve.push("Schema id is required");
+        }
 
-    if sc.attributes.len() == 0 {
-        ve.push("A schema should contain atleast one attribute");
+        if self.attributes.len() == 0 {
+            ve.push("A schema should contain atleast one attribute");
+            return ve;
+        }
+
+        let validNameRegex: Regex = Regex::new(r"^[0-9A-Za-z_$-]+$").unwrap();
+        for attr in self.attributes.iter_mut() {
+            self.validateAttrType(attr, &mut ve, &validNameRegex);
+            let name = attr.name.to_ascii_lowercase();
+            self.attrMap.insert(name.clone(), attr);
+            if attr.isUnique {
+                self.uniqueAts.push(name.clone())
+            }
+
+            if attr.required {
+                self.requiredAts.push(name.clone())
+            }
+        }
+
         return ve;
     }
 
-    for attr in sc.attributes.iter_mut() {
-        validateAttrType(attr, sc, &mut ve);
-        let name = attr.name.to_ascii_lowercase();
-        sc.attrMap.insert(name.clone(), attr);
-        if attr.isUnique {
-            sc.uniqueAts.push(name.clone())
+    fn validateAttrType(
+        &mut self,
+        attr: &mut AttrType,
+        ve: &mut Vec<&str>,
+        validNameRegex: &Regex,
+    ) {
+        // ATTRNAME   = ALPHA *(nameChar)
+        // nameChar   = "$" / "-" / "_" / DIGIT / ALPHA
+        // ALPHA      =  %x41-5A / %x61-7A   ; A-Z / a-z
+        // DIGIT      =  %x30-39            ; 0-9
+
+        if !validNameRegex.is_match(&attr.name) {
+            ve.push(&format!("invalid attribute name '{}'", &attr.name));
         }
 
-        if attr.required {
-            sc.requiredAts.push(name.clone())
+        attr.Type.make_ascii_lowercase();
+        if !exists(&attr.Type, validTypes) {
+            ve.push(&format!(
+                "invalid type '{}' for attribute '{}'",
+                &attr.Type, &attr.name
+            ));
         }
-    }
 
-    return ve;
-}
+        attr.mutability.make_ascii_lowercase();
+        if !exists(&attr.mutability, validMutability) {
+            ve.push(&format!(
+                "invalid mutability '{}' for attribute '{}'",
+                &attr.mutability, &attr.name
+            ));
+        }
 
-fn validateAttrType<'a>(attr: &'a mut AttrType<'a>, sc: &'a mut Schema<'a>, ve: &mut Vec<&str>) {
-    // ATTRNAME   = ALPHA *(nameChar)
-    // nameChar   = "$" / "-" / "_" / DIGIT / ALPHA
-    // ALPHA      =  %x41-5A / %x61-7A   ; A-Z / a-z
-    // DIGIT      =  %x30-39            ; 0-9
+        attr.returned.make_ascii_lowercase();
+        if !exists(&attr.returned, validReturned) {
+            ve.push(&format!(
+                "invalid returned '{}' for attribute '{}'",
+                &attr.returned, &attr.name
+            ));
+        }
 
-    if !validNameRegex.is_match(&attr.name) {
-        ve.push(&format!("invalid attribute name '{}'", &attr.name));
-    }
+        attr.uniqueness.make_ascii_lowercase();
+        if !exists(&attr.uniqueness, validUniqueness) {
+            ve.push(&format!(
+                "invalid uniqueness '{}' for attribute '{}'",
+                &attr.uniqueness, &attr.name
+            ));
+        }
 
-    attr.Type.make_ascii_lowercase();
-    if !exists(&attr.Type, validTypes) {
-        ve.push(&format!(
-            "invalid type '{}' for attribute '{}'",
-            &attr.Type, &attr.name
-        ));
-    }
+        if attr.isRef && (attr.referenceTypes.len() == 0) {
+            ve.push(&format!(
+                "No referenceTypes set for attribute '{}'",
+                &attr.name
+            ));
+        }
 
-    attr.mutability.make_ascii_lowercase();
-    if !exists(&attr.mutability, validMutability) {
-        ve.push(&format!(
-            "invalid mutability '{}' for attribute '{}'",
-            &attr.mutability, &attr.name
-        ));
-    }
+        if attr.isComplex && (attr.subAttributes.len() == 0) {
+            ve.push(&format!(
+                "No subattributes set for attribute '{}'",
+                &attr.name
+            ));
+        }
 
-    attr.returned.make_ascii_lowercase();
-    if !exists(&attr.returned, validReturned) {
-        ve.push(&format!(
-            "invalid returned '{}' for attribute '{}'",
-            &attr.returned, &attr.name
-        ));
-    }
+        attr.schemaId = self.id.clone();
+        attr.normName = attr.name.to_ascii_lowercase();
 
-    attr.uniqueness.make_ascii_lowercase();
-    if !exists(&attr.uniqueness, validUniqueness) {
-        ve.push(&format!(
-            "invalid uniqueness '{}' for attribute '{}'",
-            &attr.uniqueness, &attr.name
-        ));
-    }
-
-    if attr.isRef && (attr.referenceTypes.len() == 0) {
-        ve.push(&format!(
-            "No referenceTypes set for attribute '{}'",
-            &attr.name
-        ));
-    }
-
-    if attr.isComplex && (attr.subAttributes.len() == 0) {
-        ve.push(&format!(
-            "No subattributes set for attribute '{}'",
-            &attr.name
-        ));
-    }
-
-    attr.schemaId = sc.id.clone();
-    attr.normName = attr.name.to_ascii_lowercase();
-
-    if attr.isComplex {
-        //log.Debugf("validating sub-attributes of attributetype %s\n", attr.Name)
-        for sa in attr.subAttributes.iter_mut() {
-            //log.Tracef("validating sub-type %s of %s", sa.Name, attr.Name);
-            validateAttrType(sa, sc, ve);
-            sa.parent = Some(attr);
-            attr.subAttrMap.insert(sa.normName.clone(), sa);
-            let name = format!("{}{}{}", &attr.normName, ATTR_DELIM, &sa.normName);
-            if sa.isUnique {
-                sc.uniqueAts.push(name.clone());
+        if attr.isComplex {
+            //log.Debugf("validating sub-attributes of attributetype %s\n", attr.Name)
+            for sa in attr.subAttributes {
+                //log.Tracef("validating sub-type %s of %s", sa.Name, attr.Name);
+                let mut a = &sa;
+                self.validateAttrType(&mut a, ve, validNameRegex);
+                a.parent = Some(attr);
+                attr.subAttrMap.insert(sa.normName.clone(), a);
+                let name = format!("{}{}{}", &attr.normName, ATTR_DELIM, &sa.normName);
+                if sa.isUnique {
+                    self.uniqueAts.push(name.clone());
+                }
+                if sa.required {
+                    self.requiredAts.push(name)
+                }
             }
-            if sa.required {
-                sc.requiredAts.push(name)
-            }
-        }
 
-        // add missing default sub-attributes https://tools.ietf.org/html/rfc7643#section-2.4
-        if attr.multiValued {
-            addDefSubAttrs(attr);
-            setAttrDefaults(attr);
+            // add missing default sub-attributes https://tools.ietf.org/html/rfc7643#section-2.4
+            if attr.multiValued {
+                addDefSubAttrs(attr);
+                setAttrDefaults(attr);
+            }
         }
     }
 }
